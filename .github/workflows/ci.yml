@@ -1,68 +1,61 @@
-# Triggering build with write scope token
-
 name: React CI/CD
 
 on:
   push:
-    branches:
-      - main
-
-  pull_request:
-    branches:
-      - main
+    branches: [ "main" ]
 
 jobs:
   build-and-deploy:
-
     runs-on: ubuntu-latest
 
     steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
 
-      # 1. Checkout source code
-      - name: Checkout Code
-        uses: actions/checkout@v4
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: 'npm'
+        # 👈 Points directly to the package-lock.json inside your subfolder
+        cache-dependency-path: './ci_demo/package-lock.json' 
 
-      # 2. Setup Node.js
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
+    - name: Install Dependencies
+      run: |
+        cd ci_demo
+        npm install
 
-      # 3. Install dependencies
-      - name: Install Dependencies
-        run: npm ci
+    - name: Build React Application
+      run: |
+        cd ci_demo
+        npm run build
 
-      # 4. Build React application
-      - name: Build React Application
-        run: npm run build
+    # --- BELOW STEPS ARE DOCKER & EC2 ENHANCEMENTS SEEN IN YOUR WORKFLOW LOGS ---
+    # (Ensure you have your GitHub Secrets set up in your repository settings if using these)
 
-      # 5. Login to Docker Hub
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # 6. Build Docker image
-      - name: Build Docker Image
-        run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/reactapp:latest .
+    - name: Build Docker Image
+      run: |
+        cd ci_demo
+        docker build -t ${{ secrets.DOCKER_USERNAME }}/react-app:latest .
 
-      # 7. Push Docker image to Docker Hub
-      - name: Push Docker Image
-        run: |
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/reactapp:latest
+    - name: Push Docker Image
+      run: |
+        docker push ${{ secrets.DOCKER_USERNAME }}/react-app:latest
 
-            # 8. Deploy to EC2
-      - name: Deploy to EC2
-        uses: appleboy/ssh-action@v1.2.2
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/reactapp:latest
-            sudo docker stop reactapp my-react-website || true
-            sudo docker rm reactapp my-react-website || true
-            sudo docker run -d --name reactapp -p 80:80 ${{ secrets.DOCKERHUB_USERNAME }}/reactapp:latest
+    - name: Deploy to EC2
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USERNAME }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          docker pull ${{ secrets.DOCKER_USERNAME }}/react-app:latest
+          docker stop react-container || true
+          docker rm react-container || true
+          docker run -d --name react-container -p 80:80 ${{ secrets.DOCKER_USERNAME }}/react-app:latest
