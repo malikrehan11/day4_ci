@@ -270,7 +270,7 @@ function App() {
             </span>
 
             <h2>
-              SELECT YOUR BATTLE. v
+              SELECT YOUR BATTLE.
             </h2>
 
           </div>
